@@ -1,0 +1,92 @@
+---
+title: "VB Basics"
+author: "Yu Yang"
+date: "19 August 2019"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+fontsize: 20pt
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Overview
+
+The purpose of VB is to approximate the true posterior distribution $p(\theta \rvert y)$ by some distribution of a known family.
+
+
+
+KL divergence: $KL(\lambda) = KL (q_\lambda(\theta) || p(\theta\rvert y ) = \int log \frac{q_\lambda (\theta)} {p\theta |y )} q_\lambda(\theta) d\theta$
+
+
+
+Denote $L_\lambda(\lambda) = \int [ log h(\theta) - log q_\lambda(\theta)] q_\lambda(\theta) d\theta$, where $h( \theta) = p(\theta |y) p(\theta)$
+
+
+
+It is easy to show that $KL(\lambda) + L_\lambda(\lambda) = log p(y)$
+
+
+
+To minimize KL, it is equivalent to maximize $L_\lambda(\lambda)$.
+
+
+
+# stochastic VB 
+Treat $L_\lambda(\lambda)$ as a function with unknown parameters $\lambda$, to maximize $L$, we use stochastic ascent VB. 
+$\lambda^{(t+1)} = \lambda^{(t)}+ a_t \hat{\nabla_\lambda L(\lambda)}$
+
+$a_t$ is called learning rate/step size. It could be fixed/set by ADAM/ADADELTA/ADAGRAD methods.
+
+# Four techniques to minimize KL
+
+## standard VB
+
+\[ {\nabla_\lambda L(\lambda)} = \int \nabla_\lambda log q_\lambda(\theta) \{ log h(\theta) - log q_\lambda(\theta) \} q_{\lambda} (\theta) d\theta\]
+
+Use Monte Carlo method:
+
+\[ \hat{\nabla_\lambda L(\lambda)} = \frac{1}{S} \sum_{j=1}^{S} \{ log h(\theta^{j}) - log q_\lambda(\theta^j) \} \nabla_\lambda log q_\lambda(\theta^j)
+\]
+
+
+## Use control variates
+
+The naive estimator yields to large variance, to control the variance, we use control variates methods.
+
+Denote $B_i = \nabla_{\lambda_i} log q_\lambda (\theta) \{ log h(\theta) - log q_\lambda(\theta) \}$
+
+\[ \hat{\nabla_{\lambda_i} L(\lambda)} = \frac{1}{S} \sum_{j=1}^{S} \{ log h(\theta^{j}) - log q_\lambda(\theta^j) - c_i \} \nabla_\lambda log q_\lambda(\theta^j)
+\]
+
+where $c_i = \frac{Cov(B_i, \nabla_{\lambda_i} log q_\lambda(\theta))}{Var(\nabla_{\lambda_i}  log q_\lambda(\theta))}$
+
+
+## reparameterization trick
+
+$\theta = g(\lambda,\epsilon) \sim q_\lambda(\theta)$,
+$\epsilon \sim p(\epsilon)$ does not depend on $\lambda$.
+
+\[L_\epsilon = E_\epsilon\{ log h(g(\lambda,\epsilon)) - log q_\lambda(g(\lambda,\epsilon)) \}\]
+
+Take derivatie w.r.t. $\lambda$
+
+\[\nabla L_\lambda =  E_\epsilon \{\nabla_\lambda g(\lambda,\epsilon) [ \nabla_\theta log h(g(\lambda,\epsilon)) - \nabla_\theta log q_\lambda(g(\lambda,\epsilon))] \}\]
+
+Monte Carlo estimate:
+\[\hat{\nabla_\lambda L(\lambda)} = \frac{1}{S} \sum_{i=1}^{S} \nabla_\lambda g(\lambda,\epsilon^i) 
+\{ \nabla_\theta log h(g(\lambda,\epsilon^i)) - \nabla_\theta log q_\lambda (g(\lambda,\epsilon^i)\}\]
+
+## natural gradient
+
+\[\nabla_\lambda L(\lambda)^{natural} = I_F(\lambda)^{-1} \nabla_\lambda L(\lambda)\]
+
+$I_F(\lambda)^{-1}$ is the inverse of Fisher information.
+
+$I_F(\lambda) = E[ (\frac{\partial}{\partial \lambda} log f(x|\lambda))^2 |\lambda] =  Var_\lambda [\frac{\partial}{\partial \lambda} log f(x|\lambda)]$.
+
+If $f(x|\lambda)$ is twice differentiable, then $I_F(\lambda) = -E[ \frac{\partial^2}{\partial \lambda^2} log f(x|\lambda) |\lambda]$. Here $f(x|\lambda)$ is the same as $q_\lambda(\theta)$ , x is equivalent to $\theta$).

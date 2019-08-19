@@ -1,0 +1,98 @@
+---
+title: 'case study1: bernoulli distribution'
+author: "Yu Yang"
+date: "19 August 2019"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+fontsize: 20pt
+---
+
+## Question
+
+suppose we have n observations from a bernoulli distributin with unknown parameter $\eta$, how could we do Variational Bayes in this problem.
+
+## More details
+
+Let's suppose the prior of $\eta \sim uniform(0,1)$. 
+
+
+log-likelihood of $y_1...y_n$:
+\[ log p(y|\eta) = \sum_i y_i ln(\eta) + \sum_i (1-y_i)ln(1-\eta) \]
+
+The transformation of $\eta$: $log(\frac{\eta}{1-\eta}) = \theta$, then $\theta$ is unconstrained and $\eta = \frac{1}{1+exp(-\theta)}$
+
+By using of change of variable, the prior of $\theta$ is:
+
+\[p(\theta) = p(\eta) |\frac{\partial \eta}{\partial \theta}| = \frac{exp(-\theta)}{(1+exp(-\theta))^2}\]
+
+Similarly, the log likelihood in terms of $\theta$ is :
+
+\[ log p(y|\theta) = -\sum_i ln (1+ exp((1-2y_i)\theta)) \]
+
+## MCMC 
+
+We propose a random walk for $\eta^*$, where $q(\eta \to \eta^*) \sim N(\eta,0.1^2)$. So the proposal is symmentric. The acceptance rate $\alpha = min\{ 1, p(y|\eta^*)p(\eta^*)/ p(y|\eta)p(\eta) \}$.
+
+
+## VB: standard approach
+Write out components one by one, $\lambda = \{ \mu, log\sigma^2\}$
+\[ log  q_\lambda(\theta) =  -0.5 log 2\pi -0.5log\sigma^2 - \frac{(\theta-\mu)^2}{2\sigma^2}\]
+
+\[log h(\theta) = -\sum_i ln (1+ exp((1-2y_i)\theta)) - log [\frac{exp(-\theta)}{(1+exp(-\theta))^2}]\]
+
+\[\nabla_\lambda log q_\lambda(\theta) = \begin{pmatrix}\frac{\theta - \mu}{\sigma^2} \\
+-0.5 + \frac{(\theta-\mu)^2}{2\sigma^2}
+\end{pmatrix}\]
+
+
+Conclusion: standard approach only works for large S (i.e. S=100). For small sample value, the gradient changes drastically and lead to unbounded estimates of $\mu$, $\sigma$.
+
+## VB: reparameterizaiton trick
+
+Denote $\theta = g(\lambda,\epsilon) = \mu + \sigma \epsilon$, where $\epsilon \sim N(0,1)$. Here $\lambda = \{ \mu, log \sigma\}$. *[different from standard VB]*
+
+From standard VB, we already derive $log h(\theta)$. Now taking derivative wrt $\theta$.
+
+\[ \nabla_\theta log h(\theta)  = \sum_i \frac{2y_i-1} {exp((2y_i-1)\theta) + 1} + \frac{exp(-\theta)-1}{1+exp(-\theta)}\]
+
+\[\nabla_\lambda g(\lambda, \epsilon) = \begin{pmatrix} 1 \\ \sigma\epsilon \end{pmatrix} \]
+
+
+## VB: natural gradient
+
+$\lambda = \{\mu, log \sigma^2 \}$
+To find the fisher information matrix for $logq_\lambda(\theta)$, denote $l = log q_\lambda(\theta)$
+
+\[ \frac{\partial l}{\partial \mu } =  \frac{\theta-\mu}{\sigma^2}\]
+
+
+\[ \frac{\partial^2 l}{\partial \mu^2 } =  -\frac{1}{\sigma^2}\]
+
+\[ \frac{\partial l}{\partial log \sigma^2 } =  -0.5 + \frac{(\theta-\mu)^2}{2\sigma^2} \]
+
+\[ \frac{\partial^2 l}{\partial (log \sigma^2)^2 } =  - \frac{(\theta-\mu)^2}{2\sigma^2} \]
+
+\[ \frac{\partial^2 l}{\partial \mu \partial log\sigma^2 } = \frac{\partial^2 l}{\partial log\sigma^2 \partial \mu  } -\frac{\theta-\mu}{\sigma^2}\]
+
+\[ I_F(\lambda) = -E[ \frac{\partial^2 l}{\partial \lambda^2} |\lambda]  = \begin{pmatrix} 1/\sigma^2 & 0 \\ 0& 0.5\end{pmatrix}\]
+
+## Code implementation
+
+In *case_study1_bernoulli_Rcode.R*, the following methods are implemented.
+
+
+Standard VB, S=100. This method fails for small S. Also, I set a small learning rate  ($a_t = 1/(25+5t)$)
+
+Reparameterization VB, S=10. This method works well for small S, (i.e S=10)
+
+Natural gradient VB, S = 50. This method also requires S to be relatively large, otherwise the Fisher information matrix is singular.
+
+Reparameterizatoin VB + Adam, S = 1, learning rate is slow compared with other methods
+
+Reparameterizatoin VB + Adadelta, S = 1, performs well
+
+MCMC, burn_in = 2000, iteration = 2000, as a benchmark.
+
+
