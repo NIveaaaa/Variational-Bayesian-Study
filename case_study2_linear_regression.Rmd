@@ -1,0 +1,95 @@
+---
+title: 'case study2: normal regression'
+author: "Yu Yang"
+date: "19 August 2019"
+output: html_document
+---
+
+# Question:
+
+Suppose we have n observations from p-dimentional data $x_1..x_p$. Assume the underlying distribution is $y_i = x\beta + \epsilon, \epsilon \sim N(0, \sigma^2)$.
+
+We are interested in the posterior distribution of $\beta$, $\sigma$.
+
+# More details:
+
+Let's consider a low dimension problem where $p<<n$.Bayesian linear regression usually adopts conjugate prior distribution. For variational Bayes, we need a large matrix $\Sigma$ to approximate the correlation between $\beta \sigma^2$, which will increase in the order of $p^2$. Hence, in variational Bayes, some methods should be implemented to reduce the parameter needed to construct the covariance matrix. Here, we consider the Cholesky decomposition. The main reference is Tan & Nott 2017 (https://arxiv.org/abs/1605.05622).
+
+
+# MCMC details
+
+Consider a conjugate prior distribution $p(\sigma^2,\beta)$:
+
+prior for $\sigma^2$:
+\[ p(\sigma^2) \sim Inv Gamma (a_0,b_0) \]
+
+\[ p(\sigma^2) = \frac{b_0^{a_0}}{\Gamma(a_0)} (\sigma^2)^{-1-a_0} exp(-b_0/\sigma^2) \]
+
+\[ p(\beta | \sigma^2) \sim N(\mu_0, \sigma^2 \Lambda_0^{-1}) \]
+
+
+likelihood: 
+
+\[ p(y|\beta, \sigma^2) = (2\pi \sigma^2)^{-n/2} exp(-\frac{1}{2\sigma^2} (y-X\beta)^T(y-X\beta)) \]
+
+posterior $p(\beta,\sigma^2 | y) = p(\beta|\sigma^2,y) p (\sigma^2 |y)$:
+
+\[ a_n = a_0 + n/2 \quad b_n = b_0 + 0.5(y^T y + \mu_0^T\Lambda_0\mu_0 - \mu_n^T \Lambda_n \mu_n)\]
+
+\[\Lambda_n = X^T X + \Lambda_0; \quad \mu_n = (X^TX + \Lambda_0)^{-1} (\Lambda_0 \mu_0 + X^Ty)\]
+
+
+\[p(\sigma^2|y) \sim Inv Gamma(a_n, b_n) \]
+
+\[p(\beta | \sigma^2, y) \sim N(\mu_n, \sigma^2 \Lambda_n^{-1})\]
+
+In code, choose $\Lambda_0$  = diag(1/100,p), a diagnol matrix with entry 1/100 on the diagnol. $\mu_0$ = 0, $a_0 = 0.1$, $b_0 = 0.1$.
+
+
+# VB details
+$\lambda = \{ \mu, vec(C) \}$. Note $vec(C)$ is the stack of a lower triangular matrix C with positive entry. To ensure the positivity of entry, we model $log(tr(C)$ instead of $tr(C)$ in implementation.
+
+$\theta = \{\beta, log \sigma^2\}$, so $q_\lambda(\theta)\sim N(\mu, C^{-T}C^{-1})$, ($\Sigma^{-1} = CC^T$).
+
+Use reparameterization trick: 
+$\theta = g(\lambda,s ) = \mu + (C^T)^{-1} s$, $s\sim N(0, I_{p+1})$
+
+By change of variable, we have $q(\theta|\mu,C) = |C| f(C^T(\theta-\mu))$, where f(.) is a standard multivariate normal distribution.
+
+The lower bound $L_\lambda(\mu, C) = E_s [log h(\mu+C^{-T}s)] - log |C|$
+
+Consider the reparameterization trick
+
+\[\nabla_\lambda L(\mu, C) = \frac{1}{S} \sum_i \nabla_\lambda g(\lambda,s) \{\nabla_\theta log h(g(\lambda,s^i))- \nabla_\theta log q_\lambda(g(\lambda,s^i))\}\]
+
+Take take derivate wrt $\mu$ is easy. The hard part is taking derivative wrt C. Here we refer to the equation provided by Tan & Nott 2017,
+
+The unbiased estimaor of $\nabla_\mu L$ and $\nabla_C L$ is given by
+
+\[ \hat{g}_{\mu,2} = \nabla_\theta log h(\mu + C^{-T} s) + TS\]
+
+\[ \hat{g}_{T,2} = -C^{-T}s (\nabla_\theta log h(\mu + C^{-T}s)+Cs)^T C^{-T} \]
+
+Assume of prior of $\theta$ is the same as MCMC approach.
+Derive gradient of h(.) by parts. 
+
+\[ \nabla_{\beta_j} log h(\theta) = \frac{1}{\sigma^2}(\sum_i (y_i-x_i\beta)x_{ij}) - \beta_j \Lambda_{j,j}/\sigma^2 \]
+
+\[ \nabla_{\log \sigma^2} log h(\theta) = -n/2 + \frac{\sum_i (y_i - x_i\beta)^2}{2\sigma^2} - \frac{p}{2} + \frac{\sum_i \beta_i^2 \Lambda_{0,i,i}}{2\sigma^2} - (a_0+1) + \beta_0/\sigma^2 \]
+
+\[ \nabla_\theta log h(.) = [ \nabla_{\beta_j} h(.), \nabla_{log \sigma^2} h(.)]^T, \quad j = 1,...p\]
+
+
+Use algorithm 2 to implement the code. Notice the operation on log(tr(C)), where $g_{T,2}$ does not set constraints on diagnol elements.
+
+## Code implementation
+
+1 Use Algorithm with ADADELTA in the paper
+
+2 Vectorize T ,  $\Delta^2_{T'}$, $g_T'$, $E(\Delta_T'^2)$ (here is C) when compute step 10-12 
+
+3 R code attached set $p=5, n=500, \beta_1...\beta_5 = -2,-1,..2,\sigma^2 =1$,$\rho = 0.9, \epsilon= 10^{-6}$, $\Lambda_0 = diag(1/100,p), a_0 = b_0 = 0.1$
+
+4 MCMC as a benchmark. VB performs well against MCMC result. 
+
+5 As dimension of p increases, it takes much longer time for VB to run. Also more iterations are required.
