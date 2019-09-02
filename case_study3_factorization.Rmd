@@ -1,0 +1,124 @@
+---
+title: "case_study3_factorization"
+author: "Yu Yang"
+date: "27 August 2019"
+output: html_document
+---
+
+
+## Method Overview
+
+Target: to recover a covariance matrix by using factor models.
+
+\[ \theta =  \mu + Bz + d\odot\epsilon \]
+
+$\mu: m \times 1$
+
+$B: m \times p \quad ( p<< m)$ B is a lower triangular matrix
+
+$z: p \times 1$
+
+$d: Diag(D)$ D is a diagnonal matrix with $d_i$ (i=1,...m) entry.
+
+$\epsilon: m \times 1$
+
+The reparameterization trick above is equivalent to $\theta \sim N(\mu, BB^T+D^2)$,when $z,\epsilon \sim N(0,I)$ 
+
+Lower bound could be written as :
+
+\[ L(\lambda) = E_f(log h(\theta) - log q_\lambda(\theta))\]
+
+\[ \theta = f(z,\epsilon)  = \mu + Bz + d \circ \epsilon\]
+
+\[\lambda = \{\mu, B, D\} \]
+
+\[ log q_\lambda(\theta) = -0.5 m log 2\pi - 0.5 log |BB^T + D| - 0.5 (Bz + d\circ \epsilon)^T (BB^T + D^2)^{-1}(Bz + d\circ \epsilon)) \]
+
+\[ L(\lambda) = E_f (log h (\mu + Bz = d \circ \epsilon) + 0.5 m log 2\pi + 0.5 log |BB^T + D| + 0.5 (Bz + d\circ \epsilon)^T (BB^T + D^2)^{-1}(Bz + d\circ \epsilon)) \]
+
+Take the derivative wrt $\mu, B, d$ is the formula in Ong & Nott 2017 (https://arxiv.org/abs/1701.03208). equation (6) (9) and (10)
+
+## example 1 linear regression
+$\theta = \{ \beta , log \sigma^2 \}$
+$y = X \beta + \delta, \delta \sim N(0, \sigma^2)$
+
+The deriviative wrt \beta and \delta is the same what we did in case study 2 (assume same prior).
+
+\[ \nabla_{\beta_j} log h(\theta) = \frac{1}{\sigma^2}(\sum_i (y_i-x_i\beta)x_{ij}) - \beta_j \Lambda_{j,j}/\sigma^2 \]
+
+\[ \nabla_{\log \sigma^2} log h(\theta) = -n/2 + \frac{\sum_i (y_i - x_i\beta)^2}{2\sigma^2} - \frac{p}{2} + \frac{\sum_i \beta_i^2 \Lambda_{0,i,i}}{2\sigma^2} - (a_0+1) + \beta_0/\sigma^2 \]
+
+\[ \nabla_\theta log h(.) = [ \nabla_{\beta_j} h(.), \nabla_{log \sigma^2} h(.)]^T, \quad j = 1,...p\]
+
+## example 2 logistic regression
+
+The link function is logit(.). $\theta = \{ \beta \}$, the variance is implicitly determined by $logit(X\beta)$.
+
+\[ log (y | \beta) =  \sum_i log (\frac{ exp(y_i  X_i\beta)}{1+exp(X_i\beta)}) = y^T (X\beta) - 1^Tlog(1+ exp(X\beta)) \]
+
+
+Consier Independent Metropolic Hasting approach, where the proposal for $\beta$ is independent of its current value.
+
+\[ q(\beta^{curr}\to \beta^{prop}) \sim N \bigg(\hat{\beta}_{MLE}, \big(- \frac{\partial^2 l}{\partial \beta \partial \beta^T} (\hat{\beta}_{MLE}) \big)^{-1} \bigg)\]
+
+Denote $\mu_\beta =\hat{\beta}_{MLE}, \Sigma_\beta=\big(- \frac{\partial^2 l}{\partial \beta \partial \beta^T} (\hat{\beta}_{MLE}) \big)^{-1}$
+
+\[ log q(\beta) = -0.5 p log (2\pi) - 0.5 log |\Sigma| -0.5 (\beta-\mu_\beta)^T \Sigma_\beta^{-1} (\beta -\mu_\beta)\]
+
+Take derivative wrt $\beta$ ($\theta$)
+\[ \nabla_{\theta_j} log h(\theta) = y^T x_j - \sum_i \frac{exp(x_i\beta) x_{ij}}{1+exp(x_i\beta)} - [\Sigma_\beta^{-1} (\beta - \mu_\beta)]_{j} \], where $x_j$ is the jth column of X. 
+
+
+## code implemenation
+
+detailed steps of Algorighm 1 in Ong & Nott paper 2017.
+
+Notation: $\lambda = \{ \mu, B,d\}$
+
+step 0: initialize $\lambda^0 = (\mu^0, B^{0}, d^0) = 0, t=0, E[g_{\lambda_i}^2]^{0} = E[\Delta_{\lambda_i}^{2} ]^{0} = 0$
+
+Cycle until some stopping rule statisfied:
+
+step 1: generate ($\epsilon^t, z^t \sim N(0,I)$). set $\theta^t = \mu^t + B^t z^t + d^t \circ \epsilon$
+
+step 2: construct unbiased estimates of $\nabla_\mu L, \nabla_d L, \nabla_BL$. to save computation effort, we just use one sample of $\theta^t$
+
+Note $\theta, B, \epsilon,z, d$ are all evaluated at time t.
+
+
+\[\nabla_\mu \hat{L}(\lambda) = \nabla_\theta log h(\theta) \quad eq (6)\]
+
+\[\nabla_B \hat{L}(\lambda) = \nabla_\theta log h(\theta)z^{T} + (BB^T+D^2)^{-1} (Bz + d\circ \epsilon)z^T \quad eq (9) \]
+
+
+\[\nabla_d \hat{L}(\lambda) = diag\{ \nabla_\theta log h(\theta)\epsilon^{T} + (BB^T+D^2)^{-1} (Bz + d\circ \epsilon)\epsilon^T\} \quad eq (10) \]
+
+
+step 3-7: set adaptive learning rate $\rho^t$
+
+accumulate gradient:
+$E[g_{\lambda_i}^2]^{t} = \zeta E[g_{\lambda_i}^2]^{t-1} + (1-\zeta) g_{\lambda_i}^{2 (t)}$
+
+learning rate:
+$\rho_i^t = \frac{\sqrt{E(\Delta_{\lambda_i}^2)^{(t-1)}+\epsilon_0}}{\sqrt{E(g_{\lambda_i}^2)^{(t)}+\epsilon_0}}$
+
+update parameter:
+$\lambda_i^{(t+1)} = \lambda_i^{(t)} + \Delta \lambda_i^{(t)} = \lambda_i^{(t)} + \rho_i^{(t)} g_{\lambda_i}^{(t)}$
+
+accumulate change:
+$E[\Delta_{\lambda_i}^{2} ]^{(t)} = \zeta E[\Delta_{\lambda_i}^{2} ]^{(t-1)} + (1-\zeta)\Delta_{\lambda_i}^{2(t)}$
+
+set $\zeta = 0.95, \epsilon_0 = 10^{-6}$
+
+vectorize the update for $E(\Delta_{\lambda_i}^2), E(g_{\lambda_i}^2)$
+
+step 8: $\lambda^{(t+1)} = (\mu^{(t+1)}, B^{(t+1)}, d^{(t+1)}), t\to t+1$ 
+
+
+### details of R_code
+
+p = 10
+n = 500
+
+Num of factors used in linear regression : 2
+Num of factors used in logistic regression : 1
