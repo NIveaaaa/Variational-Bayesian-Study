@@ -71,10 +71,13 @@ get.hyperpara = function(y, x){
 }
 
 logprior = function(beta, mu.hat, sigma.hat, sigmainv.hat){
-  k = nrow(beta)
+  k = length(c(beta))
   -0.5*k*log(2*pi)- 0.5* log(det(sigma.hat))- 0.5*t(beta-mu.hat)%*%sigmainv.hat%*%(beta-mu.hat)
 }
 
+proposal.beta = function(beta,beta.hat, sigma.hat ){
+  dmvnorm(c(beta),mean = c(beta.hat),sigma = sigma.hat ,log = TRUE)
+}
 
 
 
@@ -99,9 +102,7 @@ mcmc.logistic = function(niter=2000,burn_in = 2000, y, x ){
   
     beta.prop = mvrnorm(n=1,mu=mu.hat, Sigma =  sigma.hat)
     
-    log.accept = loglik(beta.prop,y,x)+
-      logprior(beta.curr,mu.hat, sigma.hat,sigmainv.hat)-
-      loglik(beta.curr,y,x) - logprior(beta.prop,mu.hat,sigma.hat,sigmainv.hat )
+    log.accept = loglik(beta.prop,y,x)-loglik(beta.curr,y,x) 
     
     if (min(1,exp(log.accept))>runif(1)){
       beta.curr = beta.prop
@@ -263,22 +264,22 @@ VAFC.logistic = function(x,y,m = dim(x)[2],zeta = 0.95, ep0 = 1e-6, p = 2){
 
 
 #### VB result
-VB.logistic_f1 = VAFC.logistic(x=x,y=y, p = 1)
-VB.logistic_f2 = VAFC.logistic(x=x,y=y, p = 2)
-VB.logistic_f3 = VAFC.logistic(x=x,y=y, p = 3)
-VB.logistic_f4 = VAFC.logistic(x=x,y=y, p = 4)
+# VB.logistic_f1 = VAFC.logistic(x=x,y=y, p = 1)
+ VB.logistic_f2 = VAFC.logistic(x=x,y=y, p = 2)
+# VB.logistic_f3 = VAFC.logistic(x=x,y=y, p = 3)
+# VB.logistic_f4 = VAFC.logistic(x=x,y=y, p = 4)
+# 
+# tail(VB.logistic_f1$LB)
+ tail(VB.logistic_f2$LB)
+# tail(VB.logistic_f3$LB)
+# tail(VB.logistic_f4$LB)
 
-tail(VB.logistic_f1$LB)
-tail(VB.logistic_f2$LB)
-tail(VB.logistic_f3$LB)
-tail(VB.logistic_f4$LB)
 
 
+VB.logsitic = VB.logistic_f2
 
-VB.logsitic = VB.logistic_f1
-
-#ELBO is best in terms of 1 factor
-numfactor = 1
+#ELBO is best in terms of 2 factors
+numfactor = 2
 
 #### MCMC result
 mcmc.output = mcmc.logistic(y=y,x=x)
