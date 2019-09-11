@@ -1,0 +1,158 @@
+---
+title: "case study4: Gaussian Copula"
+author: "Yu Yang"
+date: "02 September 2019"
+output: html_document
+---
+
+## Reference paper
+ Smith & Nott 2019 (https://arxiv.org/abs/1904.07495)
+
+## Method Overview
+
+Target: approximate the target distribution by using implicit copular models. Consider Yeo-Johnson transformations and sparse factor structure for scale matrix.
+
+One-to-one transformaition from $t_{\gamma_i}: \theta_i \to \psi_i$
+
+\[ \psi_i = t_{\gamma_i} (\theta_i) \]
+
+\[ \psi =  \mu_\psi + B_\psi z + d_\psi \odot\epsilon \]
+
+$\mu_\psi: m \times 1$
+
+$B_\psi: m \times p \quad ( p<< m)$ B is a lower triangular matrix
+
+$z: p \times 1$
+
+$d_\psi: Diag(D_\psi)$ D is a diagnonal matrix with $d_i$ (i=1,...m) entry.
+
+$\epsilon: m \times 1$
+
+The reparameterization trick above is equivalent to $\theta \sim  N(\mu_\psi, B_\psi B_\psi^T+D_\psi^2) \Pi_{i=1}^{m} t'_{\gamma_i} (\theta_i)$,(change of variable) when $z,\epsilon \sim N(0,I)$ 
+
+Equivalently, the marginal distribution of $q_{\lambda_i} (\theta_i) = p_i(\psi_i; \mu_{\psi_i}, \Sigma_{\psi_i}) t'_{\gamma_i} (\theta_i)$, i = 1..m.
+
+
+The parameters we are interested in are: 
+$\lambda = \{ \mu_\psi, vech(B_\psi), d_\psi, \gamma_1...\gamma_m \}$
+
+Denote $\theta = u(\lambda, \epsilon, z) = t^{-1}_{\gamma_i}(\mu_\psi + B_\psi z + d_\psi \odot\epsilon)$
+
+Lower bound could be written as :
+
+\[ L(\lambda) = E_f(log h(\theta) - log q_\lambda(\theta))\]
+
+\[ \nabla_\lambda L(\lambda) = E_f (\nabla_\lambda u(\lambda, \epsilon,z ) [\nabla_\theta log h(\theta) - \nabla_\theta log q_\lambda (\theta)] ) \]
+
+ Solve the above equation by parts:
+ 
+ PART I: $\nabla_\lambda u (\lambda,\epsilon, z) =  [ \nabla_{\mu_\psi} u(.). \nabla_{B_\psi} u(.), \nabla_{d_\psi} u(.) , \nabla_\gamma u(.)] ^T$  
+ 
+\[ \frac{\partial u(.)}{\partial \mu_\psi} = \frac{\partial u(.)}{\partial \psi} \frac{\partial \psi}{\partial \mu_\psi} = \frac{d t_\gamma^{-1}(\psi)}{d \psi} = diag( \frac{d t_{\gamma_i}^{-1}(\psi_i)}{d \psi_i}), i = 1..R \]
+
+
+\[ \frac{\partial u(.)}{\partial \gamma} = \frac{d t_{\gamma}^{-1}(\psi)}{d\gamma} = diag(\frac{d t_{\gamma_i}^{-1}(\psi_i)}{d\gamma_i} )  \]
+
+
+Taking derivative wrt $vech(B_\psi)$ and $d_\psi$ should be combined with $\nabla log h(.) - \nabla log q(.)$
+
+\[ \nabla_{vech(B_\psi)} log h(\theta) = E_f (log h( t_{\gamma_i} ^{-1} (\mu_\psi+ B_\psi z  + d_\psi \circ \epsilon))  = E_f ( \frac{d \theta}{d \psi} \nabla_\theta log h(\theta) z^T)\]
+
+Note $\frac{d \theta} {d \psi} = \frac{d t_{\gamma}^{-1}(\psi)}{d \psi}$ is a R by R matrix with diagnol entry only.
+
+Similar expression for $\nabla_{D_\psi}$.
+\[ \nabla_{vech(B_\psi)} log q_\lambda(\theta) = \frac{d \theta} {d \psi} \nabla_\theta log q_\lambda(\theta) z^T\]
+
+Use the conclusion in Ont & Nott 2017. 
+
+Part II:  $\nabla_\theta log h(\theta)$: this term is model specific
+
+Part III:  $\nabla_\theta log q_\lambda(\theta)$
+
+\[ log q_\lambda (\theta) = log p(\psi; \mu_\psi, \Sigma_\psi) + \sum_{i=1}^{R} log t'_{\gamma_i} (\theta_i)  \]
+
+\[ \nabla_\theta log q_\lambda(\theta) =  - \frac{d \psi} {d \theta}  \Sigma_\psi^{-1} (\psi - \mu_\psi)  + ( t_{\gamma_i}^{''} (\theta_i)/ t_{\gamma_i}^{'} (\theta_i))^T , i = 1...m\] 
+
+
+
+We could make use of  the derivative wrt $\mu, B, d$ derived in Ong & Nott 2017 (https://arxiv.org/abs/1701.03208). equation (6) (9) and (10). The transformation plays a role in terms of  multipling $d t_{\gamma}^{-1} (\psi)/ d \psi$
+
+## example 1 bernoulli distribution 
+
+\[ y \sim bern (\theta) \]
+
+We model $\eta = log(\frac{\theta}{1-\theta})$ instead. 
+
+MCMC case: see case study 1, propose a prior on $\eta$
+
+stanard VB: see case study 1
+
+transformation: not yet implemented
+
+
+## example 2 logistic regression
+
+Similar to bernoulli distribution. Details see case study 3. 
+
+
+## Code implementation
+
+
+Following Algorighm 1 in Ong & Nott paper 2017.
+
+Notation: $\lambda = \{ \mu, B,d, \gamma\}$ (subsrcipt $\psi$ omitted here.)
+
+step 0: initialize $\lambda^0 = (\mu^0, B^{0}, d^0, \gamma^ 0) = 0, t=0, E[g_{\lambda_i}^2]^{0} = E[\Delta_{\lambda_i}^{2} ]^{0} = 0$
+
+Cycle until some stopping rule statisfied:
+
+step 1: generate ($\epsilon^t, z^t \sim N(0,I)$). set $\psi^t = \mu^t + B^t z^t + d^t \circ \epsilon$ and $\theta^t  = t_\gamma(\psi^t)$
+
+step 2: construct unbiased estimates of $\nabla_\mu L, \nabla_d L, \nabla_BL, \nabla\gamma L$. to save computation effort, we just use one sample of $\theta^t$
+
+Note $\theta, B, \epsilon,z, d, \gamma$ are all evaluated at time t.
+
+
+\[\nabla_\mu \hat{L}(\lambda) =  tr(\frac{d t_\gamma^{-1} (\psi)}{d \psi}) \circ  [\nabla_\theta log h(\theta) - \nabla_\theta log q_\lambda(\theta)]  \]
+
+\[\nabla_B \hat{L}(\lambda) = \{ tr(\frac{d t_{\gamma}^{-1}(\psi)}{d \psi}) \circ [\nabla_\theta log h(\theta) - \nabla_\theta log_\lambda q(\theta)] \} z^{T}  \]
+
+
+\[\nabla_d \hat{L}(\lambda) = diag\{  \{tr(\frac{d t_{\gamma}^{-1}(\psi)}{d \psi}) \circ [\nabla_\theta log h(\theta) - \nabla_\theta log_\lambda q(\theta)] \} \epsilon^{T} \} \]
+
+
+\[ \nabla_\gamma \hat{L} (\lambda) = diag\{ tr(\frac{d t_\gamma^{-1}(\psi)}{d \gamma}) \circ [\nabla_\theta log h(\theta) - \nabla_\theta log q_\lambda(\theta)]   \} \]
+
+\[ \nabla_\eta \hat{L} (\lambda) =\nabla_\gamma \hat{L} (\lambda) \circ \frac{d \gamma}{d \eta}, where \frac{d \gamma}{d \eta} = \frac{2 exp(\eta)} { (1+exp(\eta))^2 } \]
+
+Note we need to model $\eta = log(\frac{\gamma}{2-\gamma})$ instead of origin $\gamma$ to make ensure $\gamma$ is bounded between 0 and 2.
+
+
+ Or do the calculation in terms of scalar would be faster.
+ 
+step 3-7: set adaptive learning rate $\rho^t$
+
+accumulate gradient:
+$E[g_{\lambda_i}^2]^{t} = \zeta E[g_{\lambda_i}^2]^{t-1} + (1-\zeta) g_{\lambda_i}^{2 (t)}$
+
+learning rate:
+$\rho_i^t = \frac{\sqrt{E(\Delta_{\lambda_i}^2)^{(t-1)}+\epsilon_0}}{\sqrt{E(g_{\lambda_i}^2)^{(t)}+\epsilon_0}}$
+
+update parameter:
+$\lambda_i^{(t+1)} = \lambda_i^{(t)} + \Delta \lambda_i^{(t)} = \lambda_i^{(t)} + \rho_i^{(t)} g_{\lambda_i}^{(t)}$
+
+accumulate change:
+$E[\Delta_{\lambda_i}^{2} ]^{(t)} = \zeta E[\Delta_{\lambda_i}^{2} ]^{(t-1)} + (1-\zeta)\Delta_{\lambda_i}^{2(t)}$
+
+set $\zeta = 0.95, \epsilon_0 = 10^{-6}$
+
+vectorize the update for $E(\Delta_{\lambda_i}^2), E(g_{\lambda_i}^2)$
+
+step 8: $\lambda^{(t+1)} = (\mu^{(t+1)}, B^{(t+1)}, d^{(t+1)}, \gamma^{(t+1)}), t\to t+1$ 
+
+
+### details of R_code
+p = 10
+n = 500
+
+Num of factors used in logistic regression : 4
